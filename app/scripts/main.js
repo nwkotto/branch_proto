@@ -4,13 +4,16 @@ $(document).ready(function() {
     var Grid = function() {
         // Indexing in - data[row][column]
         var priv = {
-            grid: [[true]],
+            grid: [],
 
             // Expand the grid
             addRow: function() {
-                var freshRow = this.grid[0].map(function(item) {
-                    return false;
-                });
+            	var freshRow = [];
+            	if (this.grid.length > 0) {
+            		freshRow = this.grid[0].map(function(item) {
+	                    return -1;
+	                });
+            	}
                 this.grid.push(freshRow);
                 return this;
             },
@@ -19,7 +22,7 @@ $(document).ready(function() {
             },
             addCol: function() {
                 this.grid = this.grid.map(function(item) {
-                    item.push(false);
+                    item.push(-1);
                     return item;
                 });
                 return this;
@@ -43,12 +46,13 @@ $(document).ready(function() {
                 if (row < priv.grid.length && col < priv.grid[0].length) {
                     return priv.grid[row][col];
                 }
-                return null;
+                return -1;
             },
-            setBlock: function(row, col, blockData) {
-                priv.addRows((row + 1) - priv.grid.length).addCols((col + 1) - priv.grid[0].length);
-                console.log(priv.grid);
-                priv.grid[row][col] = blockData;
+            setBlock: function(block, index) {
+                priv.addRows((block.row + 1) - priv.grid.length).addCols((block.col + 1) - priv.grid[0].length);
+
+                // Add block index to grid
+                priv.grid[block.row][block.col] = index;
             },
 
             // Metadata methods
@@ -56,7 +60,7 @@ $(document).ready(function() {
                 return priv.grid.length;
             },
             numCols: function() {
-                return priv.grid[0].length;
+                return priv.grid.length > 0 ? priv.grid[0].length : 0;
             }
         }
 
@@ -66,24 +70,29 @@ $(document).ready(function() {
     var Board = function(params) {
         var params = params || {};
         var priv = {
+        	wrapperClass: params.wrapperClass || "block-wrapper",
             grid: new Grid(),
-            $object: $(params.selector || ".board"),
+            blocks: [],
             blockSpec: {
                 col: parseInt(params.width, 10) || 300,
                 row: parseInt(params.height, 10) || 185
             },
-            updateBounds: function() {
+            styles: {},
+            updateStyles: function() {
                 // Specify board params based on grid size
                 var width = this.blockSpec.col * this.grid.numCols(),
                     height = this.blockSpec.row * this.grid.numRows();
 
                 // Resize board; re-specify bounds
-                var $board = this.$object;
-                $board.css({
-                    "width": width + "px",
-                    "height": height + "px"
-                });
-                this.bounds = {
+                this.styles = {
+                    "width": width,
+                    "height": height
+                }
+                console.log(this.styles);
+                return this;
+            },
+            getBounds: function() {
+            	return {
                     "col": {
                         "start": $board.position().left,
                         "end": $board.position().left + $board.width()
@@ -93,7 +102,6 @@ $(document).ready(function() {
                         "end": $board.position().top + $board.height()
                     }
                 }
-                return this;
             },
             rowAndCol: function(coords) {
                 var indexes = {
@@ -111,18 +119,27 @@ $(document).ready(function() {
                 }
 
                 return indexes;
-            },
-            createBlockObject: function(row, col) {
-                var styles = "left:" + (col * this.blockSpec.col).toString() + "px; top:" + (row * this.blockSpec.row).toString() + "px;";
-                this.$object.append("<div class='block' style='" + styles + "'></div>");
             }
         };
 
         var pub = {
+        	getClassName: function() {
+        		return priv.wrapperClass;
+        	},
+        	getStyles: function() {
+        		return priv.styles;
+        	},
+        	getBlocks: function() {
+        		return priv.blocks;
+            },
             addBlock: function(row, col) {
-                priv.grid.setBlock(row, col, {});
-                priv.updateBounds();
-                priv.createBlockObject(row, col);
+            	var block = {
+            		row: row,
+            		col: col
+            	};
+            	priv.blocks.push(block);
+                priv.grid.setBlock(block, priv.blocks.length - 1);
+                priv.updateStyles();
             },
             nearestOpenBlock: function(y, x) {
                 var rowAndCol = priv.rowAndCol({
@@ -135,7 +152,7 @@ $(document).ready(function() {
         }
 
         // Initialization
-        priv.updateBounds();
+        priv.updateStyles();
 
         return pub;
     }
@@ -153,16 +170,7 @@ $(document).ready(function() {
             )
         }
     });
-
     var BoardView = React.createClass({
-        render: function() {
-            return (
-                <div className="board">
-                </div>
-            )
-        }
-    });
-    var PaneView = React.createClass({
         windowBounds: function() {
             return {
                 width: window.innerWidth,
@@ -174,8 +182,11 @@ $(document).ready(function() {
         },
         getInitialState: function() {
             var state = {
-                styles: this.windowBounds()
+                styles: this.windowBounds(),
+                board: new Board()
             }
+            state.board.addBlock(1,1);
+            console.log(state);
             return state;
         },
         componentDidMount: function() {
@@ -191,16 +202,20 @@ $(document).ready(function() {
             console.log("Click", e.clientX, e.clientY);
         },
         render: function() {
+        	var blocks = this.state.board.getBlocks();
             return (
                 <div style={this.state.styles}
                     onMouseMove={this.handleMouseMove}
                     onClick={this.handleClick}>
-                    <BoardView />
+                    <div className={this.state.board.getClassName()} style={this.state.board.getStyles()}>
+                    	Yooo
+                    </div>
+                    <div className="vertical-center"></div>
                 </div>
             )
         }
     })
-    ReactDOM.render(<PaneView />, document.getElementById("pane"))
+    ReactDOM.render(<BoardView />, document.getElementById("pane"))
 
     // var board = new Board();
     // board.addBlock(0, 0);
