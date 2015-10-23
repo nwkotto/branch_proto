@@ -7,28 +7,65 @@ $(document).ready(function() {
             grid: [],
 
             // Expand the grid
-            addRow: function() {
-            	var freshRow = [];
-            	if (this.grid.length > 0) {
-            		freshRow = this.grid[0].map(function(item) {
-	                    return -1;
-	                });
-            	}
-                this.grid.push(freshRow);
+            addRow: function(op) {
+                op = op || "push";
+                var freshRow = [];
+                if (this.grid.length > 0) {
+                    freshRow = this.grid[0].map(function(item) {
+                        return -1;
+                    });
+                }
+                this.grid[op](freshRow);
                 return this;
             },
             addRows: function(number) {
                 return this._repeat("addRow", number);
             },
-            addCol: function() {
+            addCol: function(op) {
+                op = op || "push";
                 this.grid = this.grid.map(function(item) {
-                    item.push(-1);
+                    item[op](-1);
                     return item;
                 });
                 return this;
             },
             addCols: function(number) {
                 return this._repeat("addCol", number);
+            },
+            padBoard: function() {
+                // Check outer row items
+                function updateActions(actions, block, method, param) {
+                    var action = {
+                        method: method,
+                        param: param
+                    };
+                    if (block > -1 && actions.indexOf(action) === -1) {
+                        actions.push(action);
+                    }
+                }
+
+                try {
+                    var padActions = [];
+                    // Columns
+                    for (var i = 0; i < this.grid.length; ++i) {
+                        updateActions(padActions, this.grid[i][0], this.addCol, "unshift");
+                        updateActions(padActions, this.grid[i][this.grid[0].length - 1], this.addCol, "push");
+                    }
+
+                    // Rows
+                    for (var i = 0; i < this.grid[0].length; ++i) {
+                        updateActions(padActions, this.grid[0][i], this.addRow, "unshift");
+                        updateActions(padActions, this.grid[this.grid.length - 1][i], this.addRow, "push");
+                    }
+
+                    // Initialize pad actions
+                    console.log(padActions);
+                    padActions.map(function(action) {
+                        action["method"].apply(priv, [action["param"]]);
+                    });
+                } catch (e) {
+                    console.log(e);
+                }
             },
 
             // Internal methods
@@ -52,7 +89,11 @@ $(document).ready(function() {
                 priv.addRows((block.row + 1) - priv.grid.length).addCols((block.col + 1) - priv.grid[0].length);
 
                 // Add block index to grid
+                console.log("set block", block.row, block.col);
                 priv.grid[block.row][block.col] = index;
+
+                priv.padBoard();
+                console.log("Grid", priv.grid);
             },
 
             // Metadata methods
@@ -70,7 +111,7 @@ $(document).ready(function() {
     var Board = function(params) {
         var params = params || {};
         var priv = {
-        	wrapperClass: params.wrapperClass || "block-wrapper",
+            wrapperClass: params.wrapperClass || "block-wrapper",
             grid: new Grid(),
             blocks: [],
             blockSpec: {
@@ -92,7 +133,7 @@ $(document).ready(function() {
                 return this;
             },
             getBounds: function() {
-            	return {
+                return {
                     "col": {
                         "start": $board.position().left,
                         "end": $board.position().left + $board.width()
@@ -123,21 +164,24 @@ $(document).ready(function() {
         };
 
         var pub = {
-        	getClassName: function() {
-        		return priv.wrapperClass;
-        	},
-        	getStyles: function() {
-        		return priv.styles;
-        	},
-        	getBlocks: function() {
-        		return priv.blocks;
+            getClassName: function() {
+                return priv.wrapperClass;
+            },
+            getStyles: function() {
+                return priv.styles;
+            },
+            getBlocks: function() {
+                return priv.blocks;
+            },
+            getBlockSpec: function() {
+                return priv.blockSpec;
             },
             addBlock: function(row, col) {
-            	var block = {
-            		row: row,
-            		col: col
-            	};
-            	priv.blocks.push(block);
+                var block = {
+                    row: row,
+                    col: col
+                };
+                priv.blocks.push(block);
                 priv.grid.setBlock(block, priv.blocks.length - 1);
                 priv.updateStyles();
             },
@@ -159,18 +203,37 @@ $(document).ready(function() {
 
     // ***** VIEWS ***** //
     var BlockView = React.createClass({
-        getInitialState: function() {
-
+        getBlockPosition: function() {
+            var position = {
+                left: 0,
+                top: 0
+            };
+            var spec = this.props.spec,
+                coords = this.props.coords;
+            position.left = spec.col * coords.col;
+            position.top = spec.row * coords.row;
+            return position;
         },
         render: function() {
             return (
-                <div style={this.state.styles}>
+                <div className="block" style={this.getBlockPosition()}>
                     Allo
                 </div>
             )
         }
     });
+    
     var BoardView = React.createClass({
+        getInitialState: function() {
+            var state = {
+                styles: this.windowBounds(),
+                board: new Board()
+            }
+            state.board.addBlock(0,0);
+            state.board.addBlock(1,0);
+            console.log(state);
+            return state;
+        },
         windowBounds: function() {
             return {
                 width: window.innerWidth,
@@ -180,15 +243,6 @@ $(document).ready(function() {
         updateWindowBounds: function() {
             this.setState({styles: this.windowBounds()})
         },
-        getInitialState: function() {
-            var state = {
-                styles: this.windowBounds(),
-                board: new Board()
-            }
-            state.board.addBlock(1,1);
-            console.log(state);
-            return state;
-        },
         componentDidMount: function() {
             window.addEventListener("resize", this.updateWindowBounds);
         },
@@ -196,19 +250,30 @@ $(document).ready(function() {
             window.removeEventListener("resize", this.updateWindowBounds);
         },
         handleMouseMove: function(e) {
-            console.log("Move", e.clientX, e.clientY);
+            // console.log("Move", e.clientX, e.clientY);
         },
         handleClick: function(e) {
-            console.log("Click", e.clientX, e.clientY);
+            // console.log("Click", e.clientX, e.clientY);
+        },
+        blockCoords: function(block) {
+
         },
         render: function() {
-        	var blocks = this.state.board.getBlocks();
+            var blockSpec = this.state.board.getBlockSpec();
+
+            var that = this;
+            var blocks = this.state.board.getBlocks().map(function(block) {
+                var key = block.row.toString() + block.col.toString();
+                return (
+                    <BlockView key={key} block={block} coords={block} spec={blockSpec} />
+                )
+            });
             return (
                 <div style={this.state.styles}
                     onMouseMove={this.handleMouseMove}
                     onClick={this.handleClick}>
                     <div className={this.state.board.getClassName()} style={this.state.board.getStyles()}>
-                    	Yooo
+                        {blocks}
                     </div>
                     <div className="vertical-center"></div>
                 </div>
