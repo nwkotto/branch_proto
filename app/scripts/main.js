@@ -5,10 +5,26 @@ $(document).ready(function() {
         // Indexing in - data[row][column]
         var priv = {
             grid: [],
+            centroid: {
+                col: null,
+                row: null
+            },
 
             // Expand the grid
+            updateCentroid: function(dimension, op) {
+                console.log(dimension, op);
+                var position = this.centroid[dimension],
+                    diff = op === "push" ? 1 : 0;
+                if (position !== null) {
+                    this.centroid[dimension] += diff;
+                } else {
+                    this.centroid[dimension] = 0;
+                }
+                console.log(this.centroid);
+            },
             addRow: function(op) {
                 op = op || "push";
+
                 var freshRow = [];
                 if (this.grid.length > 0) {
                     freshRow = this.grid[0].map(function(item) {
@@ -16,6 +32,8 @@ $(document).ready(function() {
                     });
                 }
                 this.grid[op](freshRow);
+                this.updateCentroid("row", op);
+
                 return this;
             },
             addRows: function(number) {
@@ -23,10 +41,13 @@ $(document).ready(function() {
             },
             addCol: function(op) {
                 op = op || "push";
+
                 this.grid = this.grid.map(function(item) {
                     item[op](-1);
                     return item;
                 });
+
+                this.updateCentroid("col", op);
                 return this;
             },
             addCols: function(number) {
@@ -59,7 +80,6 @@ $(document).ready(function() {
                     }
 
                     // Initialize pad actions
-                    console.log(padActions);
                     padActions.map(function(action) {
                         action["method"].apply(priv, [action["param"]]);
                     });
@@ -85,15 +105,26 @@ $(document).ready(function() {
                 }
                 return -1;
             },
-            setBlock: function(block, index) {
-                priv.addRows((block.row + 1) - priv.grid.length).addCols((block.col + 1) - priv.grid[0].length);
+            setBlock: function(coords, index) {
+                priv.addRows((coords.row + 1) - priv.grid.length).addCols((coords.col + 1) - priv.grid[0].length);
 
-                // Add block index to grid
-                console.log("set block", block.row, block.col);
-                priv.grid[block.row][block.col] = index;
-
+                // Add coords index to grid
+                priv.grid[coords.row][coords.col] = index;
                 priv.padBoard();
-                console.log("Grid", priv.grid);
+
+                return this.blockPosition(coords);
+            },
+            blockPosition: function(coords) {
+                return {
+                    col: coords.col - priv.centroid.col,
+                    row: coords.row - priv.centroid.row
+                }
+            },
+            blockCoords: function(position) {
+                return {
+                    col: position.col + priv.centroid.col,
+                    row: position.row + priv.centroid.row
+                }
             },
 
             // Metadata methods
@@ -129,20 +160,7 @@ $(document).ready(function() {
                     "width": width,
                     "height": height
                 }
-                console.log(this.styles);
                 return this;
-            },
-            getBounds: function() {
-                return {
-                    "col": {
-                        "start": $board.position().left,
-                        "end": $board.position().left + $board.width()
-                    },
-                    "row": {
-                        "start": $board.position().top,
-                        "end": $board.position().top + $board.height()
-                    }
-                }
             },
             rowAndCol: function(coords) {
                 var indexes = {
@@ -171,18 +189,26 @@ $(document).ready(function() {
                 return priv.styles;
             },
             getBlocks: function() {
-                return priv.blocks;
+                var blocks = priv.blocks.map(function(block) {
+                    block.coords = priv.grid.blockCoords(block.position);
+                    block.key = block.coords.row.toString() + block.coords.col.toString();
+                    return block;
+                });
+                console.log(blocks);
+                return blocks;
             },
             getBlockSpec: function() {
                 return priv.blockSpec;
             },
-            addBlock: function(row, col) {
-                var block = {
-                    row: row,
-                    col: col
-                };
+            addBlock: function(block, coords) {
                 priv.blocks.push(block);
-                priv.grid.setBlock(block, priv.blocks.length - 1);
+                var blockIndex = priv.blocks.length - 1;
+
+                // Add block to grid; return absolute coords for persistent storage
+                var position = priv.grid.setBlock(coords, blockIndex);
+                priv.blocks[blockIndex].position = position;
+
+                // Update container dimensions
                 priv.updateStyles();
             },
             nearestOpenBlock: function(y, x) {
@@ -209,9 +235,9 @@ $(document).ready(function() {
                 top: 0
             };
             var spec = this.props.spec,
-                coords = this.props.coords;
-            position.left = spec.col * coords.col;
-            position.top = spec.row * coords.row;
+                block = this.props.block;
+            position.left = spec.col * block.coords.col;
+            position.top = spec.row * block.coords.row;
             return position;
         },
         render: function() {
@@ -229,8 +255,8 @@ $(document).ready(function() {
                 styles: this.windowBounds(),
                 board: new Board()
             }
-            state.board.addBlock(0,0);
-            state.board.addBlock(1,0);
+            state.board.addBlock({"title": "Something", "subtitle": "crazy"}, {"row": 0, "col": 0});
+            state.board.addBlock({"title": "Whatever", "subtitle": "works"}, {"row": 1, "col": 0});
             console.log(state);
             return state;
         },
@@ -255,17 +281,13 @@ $(document).ready(function() {
         handleClick: function(e) {
             // console.log("Click", e.clientX, e.clientY);
         },
-        blockCoords: function(block) {
-
-        },
         render: function() {
             var blockSpec = this.state.board.getBlockSpec();
 
             var that = this;
             var blocks = this.state.board.getBlocks().map(function(block) {
-                var key = block.row.toString() + block.col.toString();
                 return (
-                    <BlockView key={key} block={block} coords={block} spec={blockSpec} />
+                    <BlockView key={block.key} block={block} spec={blockSpec} />
                 )
             });
             return (
