@@ -99,7 +99,7 @@ $(document).ready(function() {
         var pub = {
             // Getters and setters
             getBlock: function(row, col) {
-                if (row < priv.grid.length && col < priv.grid[0].length) {
+                if (row >= 0 && row < priv.grid.length && col >= 0 && col < priv.grid[0].length) {
                     return priv.grid[row][col];
                 }
                 return -1;
@@ -163,19 +163,17 @@ $(document).ready(function() {
                 }
                 return this;
             },
-            rowAndCol: function(coords) {
+            rowAndCol: function(pxCoords, target) {
                 var indexes = {
                     "row": -1,
                     "col": -1
                 };
 
-                // Check row and col bounds
-                for (var dimension in this.bounds) {
-                    if (coords[dimension] > this.bounds[dimension].start && coords[dimension] < this.bounds[dimension].end) {
-                        var difference = coords[dimension] - this.bounds[dimension].start;
-                        indexes[dimension] = Math.floor(difference / this.blockSpec[dimension]);
-                    }
-                }
+                var pxTop = pxCoords.row - target.top,
+                    pxLeft = pxCoords.col - target.left;
+
+                indexes.row = Math.floor(pxTop / priv.blockSpec.row);
+                indexes.col = Math.floor(pxLeft / priv.blockSpec.col);
 
                 return indexes;
             }
@@ -188,7 +186,7 @@ $(document).ready(function() {
             getStyles: function() {
                 return priv.styles;
             },
-            getBlocks: function() {
+            getFormattedBlocks: function() {
                 var blocks = priv.blocks.map(function(block) {
                     block.coords = priv.grid.blockCoords(block.position);
                     block.key = block.coords.row.toString() + block.coords.col.toString();
@@ -210,11 +208,13 @@ $(document).ready(function() {
                 // Update container dimensions
                 priv.updateStyles();
             },
-            nearestOpenBlock: function(y, x) {
-                var rowAndCol = priv.rowAndCol({
-                    "row": y,
-                    "col": x
-                });
+            openBlockCoords: function(pxCoords, target) {
+                var coords = {
+                    col: -1,
+                    row: -1
+                };
+                var rowAndCol = priv.rowAndCol(pxCoords, target);
+
                 return rowAndCol;
             }
         }
@@ -234,13 +234,17 @@ $(document).ready(function() {
             };
             var spec = this.props.spec,
                 block = this.props.block;
-            position.left = spec.col * block.coords.col;
-            position.top = spec.row * block.coords.row;
+            if (spec.col && spec.row) {
+                position.left = spec.col * block.coords.col;
+                position.top = spec.row * block.coords.row;
+            } else {
+                position.display = "none";
+            }
             return position;
         },
         render: function() {
             return (
-                <div className="block" style={this.getBlockPosition()}>
+                <div className="block content" style={this.getBlockPosition()}>
                     <h2>{this.props.block.title}</h2>
                     <h3>{this.props.block.subtitle}</h3>
                 </div>
@@ -254,8 +258,6 @@ $(document).ready(function() {
                 styles: this.windowBounds(),
                 board: new Board()
             }
-            state.board.addBlock({"title": "Something", "subtitle": "crazy"}, {"row": 0, "col": 0});
-            state.board.addBlock({"title": "Whatever", "subtitle": "works"}, {"row": 0, "col": 0});
             state.board.addBlock({"title": "No", "subtitle": "Diggity"}, {"row": 0, "col": 0});
             return state;
         },
@@ -270,30 +272,37 @@ $(document).ready(function() {
         },
         componentDidMount: function() {
             window.addEventListener("resize", this.updateWindowBounds);
+            this.state.board.setTarget;
         },
         componentWillUnmount: function() {
             window.removeEventListener("resize", this.updateWindowBounds);
         },
-        handleMouseMove: function(e) {
-            // console.log("Move", e.clientX, e.clientY);
+        blockWrapperMouseMove: function(e) {
+            var pxCoords = {
+                row: e.pageY,
+                col: e.pageX
+            };
+            var coords = this.state.board.openBlockCoords(pxCoords, this.refs.blockWrapper.getBoundingClientRect());
         },
-        handleClick: function(e) {
+        blockWrapperClick: function(e) {
             // console.log("Click", e.clientX, e.clientY);
         },
         render: function() {
             var blockSpec = this.state.board.getBlockSpec();
 
             var that = this;
-            var blocks = this.state.board.getBlocks().map(function(block) {
+            var blocks = this.state.board.getFormattedBlocks().map(function(block) {
                 return (
                     <BlockView key={block.key} block={block} spec={blockSpec} />
                 )
             });
             return (
-                <div style={this.state.styles}
-                    onMouseMove={this.handleMouseMove}
-                    onClick={this.handleClick}>
-                    <div className={this.state.board.getClassName()} style={this.state.board.getStyles()}>
+                <div style={this.state.styles}>
+                    <div className={this.state.board.getClassName()}
+                        style={this.state.board.getStyles()}
+                        onMouseMove={this.blockWrapperMouseMove}
+                        onClick={this.blockWrapperClick}
+                        ref="blockWrapper">
                         {blocks}
                     </div>
                     <div className="vertical-center"></div>

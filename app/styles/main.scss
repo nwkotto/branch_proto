@@ -45,10 +45,17 @@ body {
     position: absolute;
     width: 300px;
     height: 185px;
-    background-color: #eee;
     padding: 20px;
     box-sizing: border-box;
     border: 5px solid #fafafa;
+  }
+
+  .block.outline {
+    border-color: green;
+  }
+
+  .block.content {
+    background-color: #eee;
   }
 }
 
