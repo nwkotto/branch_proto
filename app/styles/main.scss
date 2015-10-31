@@ -48,6 +48,8 @@ body {
     padding: 20px;
     box-sizing: border-box;
     border: 5px solid #fafafa;
+    transition: opacity 500ms;
+    background-size: cover;
   }
 
   .block.outline {

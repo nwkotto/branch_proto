@@ -97,7 +97,7 @@ var Grid = function() {
 
     var pub = {
         // Getters and setters
-        getBlock: function(coords) {
+        getBlockIndex: function(coords) {
             if (coords.row && coords.row >= 0 && coords.row < priv.grid.length
                 && coords.col && coords.col >= 0 && coords.col < priv.grid[0].length) {
                 return priv.grid[coords.row][coords.col];
@@ -135,10 +135,10 @@ var Grid = function() {
                 left: false
             }
 
-            blocks.up = this.getBlock({row: coords.row - 1, col: coords.col}) > -1;
-            blocks.right = this.getBlock({row: coords.row, col: coords.col + 1}) > -1;
-            blocks.down = this.getBlock({row: coords.row + 1, col: coords.col}) > -1;
-            blocks.left = this.getBlock({row: coords.row, col: coords.col - 1}) > -1;
+            blocks.up = this.getBlockIndex({row: coords.row - 1, col: coords.col}) > -1;
+            blocks.right = this.getBlockIndex({row: coords.row, col: coords.col + 1}) > -1;
+            blocks.down = this.getBlockIndex({row: coords.row + 1, col: coords.col}) > -1;
+            blocks.left = this.getBlockIndex({row: coords.row, col: coords.col - 1}) > -1;
 
             for (var pos in blocks) {
                 if (blocks[pos]) {
@@ -210,12 +210,20 @@ var Board = function(params) {
             var blocks = priv.blocks.map(function(block) {
                 block.coords = priv.grid.blockCoords(block.position);
                 block.key = block.coords.row.toString() + block.coords.col.toString();
+                if (!(block.title || block.url)) {
+                    block.editing = true;
+                }
                 return block;
             });
             return blocks;
         },
         getBlockSpec: function() {
             return priv.blockSpec;
+        },
+        getBlock: function(block) {
+            var index = priv.grid.getBlockIndex(block.coords);
+            var blockToUpdate = priv.blocks[index];
+            return blockToUpdate;
         },
         addBlock: function(block, coords) {
             priv.blocks.push(block);
@@ -234,7 +242,7 @@ var Board = function(params) {
                 row: -1
             };
             var rowAndCol = priv.rowAndCol(pxCoords, target);
-            if (priv.grid.getBlock(rowAndCol) === -1 && priv.grid.adjacentBlockIsFilled(rowAndCol)) {
+            if (priv.grid.getBlockIndex(rowAndCol) === -1 && priv.grid.adjacentBlockIsFilled(rowAndCol)) {
                 coords = rowAndCol;
             }
 
@@ -257,19 +265,58 @@ var BlockView = React.createClass({
         };
         var spec = this.props.spec,
             block = this.props.block;
-        if (spec.col && spec.row) {
-            position.left = spec.col * block.coords.col;
-            position.top = spec.row * block.coords.row;
-        } else {
-            position.display = "none";
-        }
+        position.left = spec.col * block.coords.col;
+        position.top = spec.row * block.coords.row;
         return position;
     },
+    populateBlock: function(e) {
+        e.preventDefault();
+        var freshAttributes = {
+            title: this.refs.freshTitle.value,
+            subtitle: this.refs.freshSubtitle.value,
+            url: this.refs.freshUrl.value,
+            editing: false
+        };
+
+        // Update block in board object
+        this.props.updateBlock(this.props.block, freshAttributes);
+
+        this.refs.freshTitle.value = "";
+        this.refs.freshSubtitle.value = "";
+        this.refs.freshUrl.value = "";
+    },
     render: function() {
+        var styles = this.getBlockPosition();
+
+        var contents = null;
+        if (this.props.block.isDummy) {
+            contents = (
+                <div>
+                </div>
+            );
+        } else if (this.props.block.editing) {
+            contents = (
+                <form onSubmit={this.populateBlock}>
+                    <input placeholder="Title" ref="freshTitle" />
+                    <input placeholder="Subtitle" ref="freshSubtitle" />
+                    <input placeholder="Url" ref="freshUrl" />
+                    <input type="submit" />
+                </form>
+            );
+        } else {
+            styles.backgroundImage = "url(" + this.props.block.url + ")";
+            contents = (
+                <div>
+                    <h2>{this.props.block.title}</h2>
+                    <h3>{this.props.block.subtitle}</h3>
+                </div>
+            );
+        }
+
+        // Render contents in block wrapper
         return (
-            <div className="block content" style={this.getBlockPosition()}>
-                <h2>{this.props.block.title}</h2>
-                <h3>{this.props.block.subtitle}</h3>
+            <div className="block content" style={styles}>
+                {contents}
             </div>
         )
     }
@@ -281,8 +328,7 @@ var BoardView = React.createClass({
             styles: this.windowBounds(),
             board: new Board()
         }
-        state.board.addBlock({"title": "No", "subtitle": "Diggity"}, {"row": 0, "col": 0});
-        state.board.addBlock({"title": "No", "subtitle": "Doubt"}, {"row": 0, "col": 0});
+        state.board.addBlock({}, {"row": 0, "col": 0});
         return state;
     },
     windowBounds: function() {
@@ -292,11 +338,10 @@ var BoardView = React.createClass({
         }
     },
     updateWindowBounds: function() {
-        this.setState({styles: this.windowBounds()})
+        this.setState({styles: this.windowBounds()});
     },
     componentDidMount: function() {
         window.addEventListener("resize", this.updateWindowBounds);
-        this.state.board.setTarget;
     },
     componentWillUnmount: function() {
         window.removeEventListener("resize", this.updateWindowBounds);
@@ -307,10 +352,30 @@ var BoardView = React.createClass({
             col: e.pageX
         };
         var coords = this.state.board.openBlockCoords(pxCoords, this.refs.blockWrapper.getBoundingClientRect());
-        console.log(coords);
+        var freshBlock = null;
+        if (coords.row > -1 && coords.col > -1) {
+            freshBlock = {
+                coords: coords,
+                isDummy: true
+            }
+        }
+        this.setState({freshBlock: freshBlock});
     },
     blockWrapperClick: function(e) {
-        // console.log("Click", e.clientX, e.clientY);
+        var freshBlock = this.state.freshBlock;
+        if (freshBlock && freshBlock.coords.row > -1 && freshBlock.coords.col > -1) {
+            this.state.board.addBlock({}, this.state.freshBlock.coords);
+            this.setState({board: this.state.board});
+        }
+    },
+
+    // Block update functions
+    updateBlock: function(block, attributes) {
+        var blockToUpdate = this.state.board.getBlock(block);
+        for (var attribute in attributes) {
+            blockToUpdate[attribute] = attributes[attribute];
+        }
+        this.setState({board: this.state.board});
     },
     render: function() {
         var blockSpec = this.state.board.getBlockSpec();
@@ -318,9 +383,15 @@ var BoardView = React.createClass({
         var that = this;
         var blocks = this.state.board.getFormattedBlocks().map(function(block) {
             return (
-                <BlockView key={block.key} block={block} spec={blockSpec} />
+                <BlockView updateBlock={that.updateBlock} key={block.key} block={block} spec={blockSpec} />
             )
         });
+        var freshBlock = null;
+        if (this.state.freshBlock) {
+            freshBlock = (
+                <BlockView block={this.state.freshBlock} spec={blockSpec} />
+            )
+        }
         return (
             <div style={this.state.styles}>
                 <div className={this.state.board.getClassName()}
@@ -329,6 +400,7 @@ var BoardView = React.createClass({
                     onClick={this.blockWrapperClick}
                     ref="blockWrapper">
                     {blocks}
+                    {freshBlock}
                 </div>
                 <div className="vertical-center"></div>
             </div>
