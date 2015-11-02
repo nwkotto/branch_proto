@@ -104,12 +104,16 @@ var Grid = function() {
             }
             return -1;
         },
-        setBlock: function(coords, index) {
+        setBlock: function(coords, index, position) {
+            if (position) {
+                // Loading from storage
+                coords = this.blockCoords(position);
+            }
             priv.addRows((coords.row + 1) - priv.grid.length).addCols((coords.col + 1) - priv.grid[0].length);
 
             // Add coords index to grid
             priv.grid[coords.row][coords.col] = index;
-            var position = this.blockPosition(coords);
+            position = this.blockPosition(coords);
 
             priv.padBoard();
 
@@ -117,14 +121,14 @@ var Grid = function() {
         },
         blockPosition: function(coords) {
             return {
-                col: coords.col - priv.centroid.col,
-                row: coords.row - priv.centroid.row
+                col: coords.col - (priv.centroid.col || 0),
+                row: coords.row - (priv.centroid.row || 0)
             }
         },
         blockCoords: function(position) {
             return {
-                col: position.col + priv.centroid.col,
-                row: position.row + priv.centroid.row
+                col: position.col + (priv.centroid.col || 0),
+                row: position.row + (priv.centroid.row || 0)
             }
         },
         adjacentBlockIsFilled: function(coords) {
@@ -171,6 +175,18 @@ var Board = function(params) {
             row: parseInt(params.height, 10) || 185
         },
         styles: {},
+        init: function() {
+            // Pull values from local storage
+            if (localStorage.branchly) {
+                var blocks = JSON.parse(localStorage.branchly);
+                blocks.map(function(block) {
+                    pub.addBlock(block, {});
+                });
+            } else {
+                pub.addBlock({}, {col: 0, row: 0});
+            }
+            priv.updateStyles();
+        },
         updateStyles: function() {
             // Specify board params based on grid size
             var width = this.blockSpec.col * this.grid.numCols(),
@@ -230,11 +246,15 @@ var Board = function(params) {
             var blockIndex = priv.blocks.length - 1;
 
             // Add block to grid; return absolute coords for persistent storage
-            var position = priv.grid.setBlock(coords, blockIndex);
+            var position = block.position;
+            position = priv.grid.setBlock(coords, blockIndex, position);
             priv.blocks[blockIndex].position = position;
 
             // Update container dimensions
             priv.updateStyles();
+
+            // Update localStorage
+            localStorage.branchly = JSON.stringify(priv.blocks);
         },
         openBlockCoords: function(pxCoords, target) {
             var coords = {
@@ -251,7 +271,7 @@ var Board = function(params) {
     }
 
     // Initialization
-    priv.updateStyles();
+    priv.init();
 
     return pub;
 }
@@ -328,7 +348,6 @@ var BoardView = React.createClass({
             styles: this.windowBounds(),
             board: new Board()
         }
-        state.board.addBlock({}, {"row": 0, "col": 0});
         return state;
     },
     windowBounds: function() {
