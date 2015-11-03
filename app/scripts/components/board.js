@@ -52,6 +52,17 @@ var BoardView = React.createClass({
         }
         this.setState({board: this.state.board});
     },
+    updateBlockSpec: function(e) {
+        e.preventDefault();
+        var coords = {
+            col: this.refs.freshCol.value,
+            row: this.refs.freshRow.value
+        }
+        this.state.board.updateBlockSpec(coords);
+        this.setState({board: this.state.board});
+    },
+
+
     render: function() {
         var blockSpec = this.state.board.getBlockSpec();
 
@@ -69,6 +80,11 @@ var BoardView = React.createClass({
         }
         return (
             <div style={this.state.styles}>
+                <form onSubmit={this.updateBlockSpec}>
+                    <input ref="freshCol" placeholder="New column width" />
+                    <input ref="freshRow" placeholder="New row height" />
+                    <input type="submit" />
+                </form>
                 <div className={this.state.board.getClassName()}
                     style={this.state.board.getStyles()}
                     onMouseMove={this.blockWrapperMouseMove}

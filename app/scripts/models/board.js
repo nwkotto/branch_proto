@@ -70,6 +70,16 @@ var Board = function(params) {
         getBlockSpec: function() {
             return priv.blockSpec;
         },
+        updateBlockSpec: function(coords) {
+            var col = parseInt(coords.col, 10),
+                row = parseInt(coords.row, 10);
+            if (col && row) {
+                priv.blockSpec = {
+                    col: col,
+                    row: row
+                };
+            }
+        },
         getBlock: function(block) {
             var index = priv.grid.getBlockIndex(block.coords);
             var blockToUpdate = priv.blocks[index];
