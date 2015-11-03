@@ -171,8 +171,8 @@ var Board = function(params) {
         grid: new Grid(),
         blocks: [],
         blockSpec: {
-            col: parseInt(params.width, 10) || 300,
-            row: parseInt(params.height, 10) || 185
+            col: parseInt(params.width, 10) || 325,
+            row: parseInt(params.height, 10) || 200
         },
         styles: {},
         init: function() {
@@ -281,10 +281,16 @@ var BlockView = React.createClass({
     getBlockPosition: function() {
         var position = {
             left: 0,
-            top: 0
+            top: 0,
+            width: 0,
+            height: 0
         };
         var spec = this.props.spec,
             block = this.props.block;
+
+        position.width = spec.col;
+        position.height = spec.row;
+
         position.left = spec.col * block.coords.col;
         position.top = spec.row * block.coords.row;
         return position;
